@@ -275,15 +275,19 @@ FOR each module in confirmed_scope:
 
   【逐步操作】
   FOR each step:
-    a. CAPTURE → shot_{nn}_step{s}_before.png          ← 先保存
+    a. CAPTURE → shot_{nn}_step{s}_before.png          ← 先保存干净截图
     b. IF +sub OR +audio: 记录 T_start = now() - T0
-    c. 执行操作（CLICK / TYPE / PRESS_KEY）
-    d. 等待页面响应（最多 3s）
-    e. CAPTURE → shot_{nn}_step{s}_after.png           ← 先保存
-    f. VISUAL_ANALYZE（可选，失败跳过）
-    g. IF +sub OR +audio:
+    c. IF video 格式:
+         获取操作目标的屏幕坐标 (x, y)（从元素 ref 或 bounding box）
+         wait(1.5s)                                    ← 停顿，让观众找到视线焦点
+         记录 click_events.append({ t: now()-T0, x, y })
+    d. 执行操作（CLICK / TYPE / PRESS_KEY）
+    e. 等待页面响应（最多 3s）
+    f. CAPTURE → shot_{nn}_step{s}_after.png           ← 先保存干净截图
+    g. VISUAL_ANALYZE（可选，失败跳过）
+    h. IF +sub OR +audio:
          subtitles.append({ start: T_start, end: now()-T0+1500, text: "{步骤描述}" })
-    h. 记录步骤：{操作描述 + 预期结果}
+    i. 记录步骤：{操作描述 + 预期结果}
 
   【额外截图时机】
   出现弹窗/模态框  → CAPTURE → shot_{nn}_step{s}_modal.png
@@ -409,6 +413,28 @@ FOR each module in confirmed_scope:
 2. IF +sub OR +audio: 生成 SRT 字幕文件
 3. IF +audio: 用 TTS 生成旁白（优先级：edge-tts → OpenAI TTS → say → gtts）
 4. ffmpeg 合成 MP4（按 RECORD_MODE 选输入源，按选项叠加字幕/音频）
+
+   IF video 格式 AND click_events 不为空:
+     在合成前插入 zoom 聚焦后处理：
+
+     为每个 click_event { t, x, y } 生成 zoompan 片段：
+       zoom_in  时间段：t-0.3s → t+0.5s  缩放 1.0→1.3（推进）
+       zoom_out 时间段：t+0.5s → t+1.2s  缩放 1.3→1.0（拉回）
+       zoom 中心：(x, y) 对应的画面坐标
+
+     ffmpeg zoompan 滤镜示例（单次点击，坐标归一化到画面）：
+       -vf "zoompan=
+              z='if(between(t,{t-0.3},{t+1.2}), 1+0.3*sin(PI*(t-{t-0.3})/1.5), 1)':
+              x='({x}/W)*(W-iw/zoom)':
+              y='({y}/H)*(H-ih/zoom)':
+              d=1:s=1280x720"
+
+     多个点击事件时，用逗号串联多段 zoompan 条件
+
+     IF 无法获取点击坐标（工具不支持返回 bounding box）:
+       降级为居中 zoom：每步操作后对画面中心做 1.0→1.2→1.0 缓慢缩放
+       -vf "zoompan=z='1+0.2*sin(PI*t/2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1"
+
 5. 清理临时文件
 
 TTS 优先级：
