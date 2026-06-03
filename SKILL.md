@@ -69,9 +69,10 @@ metadata:
    - pdf        — 需要本地有 pandoc 或 wkhtmltopdf，先生成 HTML 再转换
    - video      — 录制操作视频，需要 ffmpeg；可与其他格式同时选
                   视频附加选项（可组合，默认全不开启）：
-                    +sub    — 生成 SRT 字幕并烧录进视频
-                    +audio  — 用 TTS 生成旁白音频并混入视频
-                  示例："video+sub+audio" = 视频 + 字幕 + 旁白（最完整）
+                    +sub        — 生成 SRT 字幕并烧录进视频
+                    +audio      — 用 TTS 生成旁白音频并混入视频
+                    +slide=N    — 截图序列模式下每张图显示 N 秒（默认 3，可设 2-8）
+                  示例："video+sub+audio+slide=4" = 每张图显示 4 秒，带字幕和旁白
    - 多选示例："markdown video+sub" = 同时输出图文教程和带字幕视频
 ```
 
@@ -418,8 +419,40 @@ FOR each module in confirmed_scope:
 ```
 1. 停止录制（按 RECORD_MODE 对应方式）
 2. IF +sub OR +audio: 生成 SRT 字幕文件
+
+   字幕时间轴按 RECORD_MODE 分两套计算方式，不可混用：
+
+   【真实录屏模式（native / playwright / screencapture / recordmydesktop）】
+   使用 Phase 3 记录的真实时间戳：
+     字幕 N 的 start = T_start_N，end = T_end_N + 1500ms
+   但需修正浏览器加载偏差：
+     对每条字幕，end - start < 1500ms 时，自动补齐到 1500ms（保证可读性）
+
+   【截图序列模式（slideshow）】
+   ⚠️ 不使用 T_start/T_end，改为按图片顺序计算：
+     每张截图固定显示时长 = SLIDE_DURATION（默认 3.0s，可在 Phase 0 配置）
+     字幕 N 的 start = N × SLIDE_DURATION
+     字幕 N 的 end   = (N+1) × SLIDE_DURATION - 0.2s（留 0.2s 间隔）
+     TTS 音频时长裁剪/补齐到 SLIDE_DURATION 秒内
+
 3. IF +audio: 用 TTS 生成旁白（优先级：edge-tts → OpenAI TTS → say → gtts）
+
+   TTS 音频时长对齐：
+   【真实录屏】每段音频自然时长，不强制裁剪；若超出字幕窗口，加速播放（atempo=1.2）
+   【slideshow】每段音频必须 ≤ SLIDE_DURATION，超出时：
+     优先加速播放（atempo 最大 1.5x）
+     仍超出则截断，在教程文字里标注"（旁白已截短）"
+
 4. ffmpeg 合成 MP4（按 RECORD_MODE 选输入源，按选项叠加字幕/音频）
+
+   【slideshow 专用合成命令】
+   ffmpeg -framerate 1/SLIDE_DURATION \
+     -pattern_type glob -i 'screenshots/shot_*.png' \
+     -i narration.mp3 \
+     -vf "subtitles=tutorial.srt:force_style='FontSize=22,...'" \
+     -c:v libx264 -pix_fmt yuv420p \
+     -c:a aac -shortest \
+     tutorial.mp4
 
    IF video 格式 AND click_events 不为空:
      在合成前插入 zoom 聚焦后处理：
