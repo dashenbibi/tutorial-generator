@@ -47,6 +47,12 @@ git clone https://github.com/dashenbibi/tutorial-generator ~/.skills/tutorial-ge
 <details>
 <summary>📦 其他安装方式</summary>
 
+**Claude Code 用户（通过 OpenClaw 安装）：**
+```bash
+# 在 Claude Code 中运行
+/install-skill tutorial-generator
+```
+
 **仅下载 skill 文件：**
 ```bash
 mkdir -p ~/.skills/tutorial-generator
@@ -96,14 +102,20 @@ Agent 会自动执行 6 个阶段：
 
 ## 🛠️ 支持的工具
 
-| 工具 | 浏览器 | 登录态 | 视频录制 |
-|------|--------|--------|----------|
-| **Claude Code** | ✅ | 复用真实 Chrome | 需配合 screencapture |
-| **Hermes** (NousResearch) | ✅ | CDP 附加 / 持久化 Session | ✅ 原生支持 |
-| **Gemini CLI** | ✅ | 复用真实 Chrome | 需配合 screencapture |
-| **OpenHands** | ✅ | ❌ 沙箱 | 需配合 recordmydesktop |
-| **Codex** (OpenAI) | ✅ | ❌ 沙箱 | Computer Use |
-| 任意支持 Playwright MCP 的工具 | ✅ | 取决于配置 | Playwright 内置 |
+本 Skill 使用抽象能力标识符，理论上支持任何具备浏览器自动化能力的 AI Agent。以下工具已验证或社区反馈可用：
+
+| 工具 | 浏览器 | 登录态 | 视频录制 | 备注 |
+|------|--------|--------|----------|------|
+| **Claude Code** | ✅ | 复用真实 Chrome | 需配合 screencapture | Anthropic 官方 CLI |
+| **Hermes** (NousResearch) | ✅ | CDP 附加 / 持久化 Session | ✅ 原生支持 | 全功能 Agent |
+| **Gemini CLI** | ✅ | 复用真实 Chrome | 需配合 screencapture | Google 官方 CLI |
+| **Cursor** | ✅ | 复用浏览器 | 需配合 screencapture | AI IDE |
+| **Windsurf** | ✅ | 复用浏览器 | 需配合 screencapture | AI IDE |
+| **OpenHands** | ✅ | ❌ 沙箱 | 需配合 recordmydesktop | 开源 Agent |
+| **Codex** (OpenAI) | ✅ App 内 | ❌ 沙箱 | Computer Use | OpenAI 官方 |
+| 任意支持 **Playwright MCP** 的工具 | ✅ | 取决于配置 | Playwright 内置 | 通用方案 |
+
+> 💡 **OpenClaw 用户**：本 Skill 已发布到 OpenClaw 市场，可直接在 Claude Code 中搜索安装。
 
 ## 📋 依赖
 
