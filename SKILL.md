@@ -1,521 +1,517 @@
 ---
 name: tutorial-generator
-version: 2.0.0
-description: "自动生成网站图文教程。输入 URL，自动探索页面、截图、记录操作步骤，生成可分享的 Markdown 图文教程。当用户需要为某个网站或工具生成使用教程时使用。"
+version: 3.0.0
+description: "Automatically generate illustrated tutorials for any website. Given a URL, explore pages, take screenshots, record steps, and produce tutorials in Markdown, HTML, PDF, or Video formats."
 metadata:
   requires:
     capabilities:
-      - NAVIGATE       # 导航到 URL
-      - CAPTURE        # 截图并保存到文件
-      - READ_PAGE      # 读取页面结构/内容
-      - CLICK          # 点击页面元素
-      - TYPE           # 向输入框填写文字
+      - NAVIGATE       # Navigate to a URL
+      - CAPTURE        # Take a screenshot and save to file
+      - READ_PAGE      # Read page structure/content
+      - CLICK          # Click a page element
+      - TYPE           # Type text into an input field
   optional:
-    - PRESS_KEY        # 键盘按键（Enter/Esc/Tab 等）
-    - RUN_JS           # 执行 JavaScript 表达式
-    - VISUAL_ANALYZE   # 截图 + AI 视觉分析（可选增强，失败不影响主流程）
-    - ANNOTATE         # 在截图上标注交互元素
-    - SCREEN_RECORD    # 录制屏幕（video 格式需要）
+    - PRESS_KEY        # Keyboard keys (Enter / Esc / Tab etc.)
+    - RUN_JS           # Execute a JavaScript expression
+    - VISUAL_ANALYZE   # Screenshot + AI visual analysis (optional enhancement, failure does not block main flow)
+    - SCREEN_RECORD    # Record screen (required for video format)
 ---
 
 # Tutorial Generator
 
-根据 URL 自动探索网站并生成图文教程。
+Explore a website and automatically generate an illustrated step-by-step tutorial.
 
 ---
 
-## 能力映射（执行前自检）
+## Capability Mapping (Self-check before starting)
 
-本 skill 使用抽象能力标识符。**在开始前，先确认当前工具环境提供了哪些对应的具体工具**，填入下表：
+This skill uses abstract capability identifiers. **Before starting, confirm which tool in your environment maps to each capability:**
 
-| 能力标识符 | 说明 | 你的工具对应 |
-|-----------|------|------------|
-| `NAVIGATE` | 打开/跳转到指定 URL | 填入你的工具名 |
-| `CAPTURE` | 截图并保存为文件 | 填入你的工具名 |
-| `READ_PAGE` | 读取页面结构（compact=仅交互元素，full=完整内容） | 填入你的工具名 |
-| `CLICK` | 点击元素（by ref / selector / coordinates） | 填入你的工具名 |
-| `TYPE` | 向输入框填写文字（自动清空再输入） | 填入你的工具名 |
-| `PRESS_KEY` | 键盘按键：Enter / Esc / Tab 等 | 填入你的工具名（可选） |
-| `RUN_JS` | 执行 JS 表达式，读取 DOM 信息 | 填入你的工具名（可选） |
-| `VISUAL_ANALYZE` | 截图 + AI 视觉理解，辅助判断页面状态 | 填入你的工具名（可选，失败不影响主流程） |
-| `ANNOTATE` | 在截图上标注交互元素（如叠加编号/红框） | 填入你的工具名（可选） |
-| `SCREEN_RECORD` | 开始/停止录屏，输出视频文件 | 填入你的工具名（video 格式需要） |
+| Identifier | Description | Your tool |
+|-----------|-------------|-----------|
+| `NAVIGATE` | Open / navigate to a URL | fill in |
+| `CAPTURE` | Take a screenshot and save to file | fill in |
+| `READ_PAGE` | Read page structure (compact = interactive elements only, full = all content) | fill in |
+| `CLICK` | Click an element (by ref / selector / coordinates) | fill in |
+| `TYPE` | Type text into an input field (clears existing text first) | fill in |
+| `PRESS_KEY` | Press a keyboard key: Enter / Esc / Tab etc. | fill in (optional) |
+| `RUN_JS` | Execute a JS expression, read DOM info | fill in (optional) |
+| `VISUAL_ANALYZE` | Screenshot + AI visual understanding, helps identify page state | fill in (optional, failure is non-fatal) |
+| `SCREEN_RECORD` | Start / stop screen recording, output video file | fill in (video format only) |
 
-> **重要：** `CAPTURE` 必须保存截图文件，不可只做视觉分析而不留文件。
-> 如果你的平台截图和视觉分析是同一个工具（如 Hermes 的 browser_vision），直接用它即可——它内部会保存文件，CAPTURE 和 VISUAL_ANALYZE 都映射到它。
-> 如果你的工具只做视觉分析、不保存文件，则需要在调用前先用其他方式单独存图。
+> **Important:** `CAPTURE` must save a clean screenshot file. Do NOT use `VISUAL_ANALYZE` as a substitute.
+> If your platform combines screenshot and visual analysis into one tool (e.g. Hermes `browser_vision`),
+> map both `CAPTURE` and `VISUAL_ANALYZE` to it — it saves the file internally.
+> If your tool only analyzes visually without saving a file, find another way to save screenshots first.
 
-**浏览器模式（影响登录处理）：**
-- **真实浏览器模式** — 连接用户正在运行的浏览器，自动继承已登录的 Cookie 和 Session
-- **沙箱模式** — 每次启动全新空白浏览器，无任何登录态，需额外处理认证
-
-如不确定当前模式，询问用户或尝试访问目标网站并检查是否已登录。
+**Browser mode (affects login handling):**
+- **Real browser mode** — connects to the user's running browser, inherits existing cookies and sessions
+- **Sandbox mode** — fresh browser each run, no login state, requires explicit authentication
 
 ---
 
-## 完整流程
+## Full Workflow
 
-### Phase 0：初始化
+### Phase 0: Initialization
 
-在开始任何操作前，**必须先问用户**：
+Before doing anything, **ask the user:**
 
 ```
-1. 教程目标读者是谁？（新手 / 进阶用户，默认新手）
-2. 想记录哪些功能？（留空 = 先侦察，再由用户从侦察结果中选择，不自动决定）
-3. 需要登录吗？如需要，请提前登录或提供账号信息。
-4. 教程输出格式？
-   - markdown （默认）— 纯文本，截图用相对路径引用，便于二次编辑
-   - html       — 独立 HTML 文件，截图内嵌为 base64，可直接在浏览器打开分享
-   - pdf        — 需要本地有 pandoc 或 wkhtmltopdf，先生成 HTML 再转换
-   - video      — 录制操作视频，需要 ffmpeg；可与其他格式同时选
-                  视频附加选项（可组合，默认全不开启）：
-                    +sub        — 生成 SRT 字幕并烧录进视频
-                    +audio      — 用 TTS 生成旁白音频并混入视频
-                    +slide=N    — 截图序列模式下每张图显示 N 秒（默认 3，可设 2-8）
-                  示例："video+sub+audio+slide=4" = 每张图显示 4 秒，带字幕和旁白
-   - 多选示例："markdown video+sub" = 同时输出图文教程和带字幕视频
+1. Who is the target audience? (Beginner / Advanced, default: Beginner)
+2. Which features to document? (Leave blank = scout first, then user picks from results)
+3. Login required? If yes, provide credentials or log in beforehand.
+4. Output language? (default: English — any language supported, e.g. 中文, Español, 日本語, 한국어, Français, Deutsch, Português, العربية...)
+5. Output format?
+   - markdown     (default) — plain text, screenshots referenced by relative path, easy to edit
+   - html         — single HTML file, screenshots embedded as base64, shareable directly
+   - pdf          — requires pandoc or wkhtmltopdf locally; falls back to HTML
+   - video        — screen recording + optional subtitles/narration, requires ffmpeg
+                    Video add-ons (combinable, all off by default):
+                      +sub        — burn SRT subtitles into video
+                      +audio      — generate TTS narration and mix into video
+                      +slide=N    — slideshow mode: display each screenshot for N seconds (default 3, range 2–8)
+                    Examples:
+                      "video"               = plain recording, no subtitles, no audio
+                      "video+sub+audio"     = recording + subtitles + narration (full)
+                      "video+sub+audio+slide=4" = slideshow, 4s per image, subtitles + narration
+   - Combine formats: "markdown video+sub" = tutorial doc + subtitled video
 ```
 
-**注意：** 问题 2 留空时，必须完成 Phase 1 侦察并展示结果，**等用户选择模块后才能继续**，不得跳过选择步骤直接生成教程。
+**Note:** If question 2 is left blank, complete Phase 1 scouting, present results, and **wait for the user to select modules** before proceeding. Do not skip the selection step.
 
-如果用户已明确列出要记录的功能（如"记录注册和支付流程"），可跳过 Phase 0 和 Phase 1 侦察，直接进入 Phase 2。
+If the user has already named the features to document (e.g. "document signup and payment"), skip Phase 0 and Phase 1 and go straight to Phase 2.
 
 ---
 
-### Phase 1：侦察
+### Phase 1: Scouting
 
 ```
 1. NAVIGATE(url)
 2. CAPTURE → shot_00_home.png
-3. READ_PAGE(full) → 读取完整页面结构
-4. 提取：页面标题、所有主导航链接、核心功能区域
-   （如有 VISUAL_ANALYZE，可额外调用辅助理解布局，但非必须）
+3. READ_PAGE(full) → read full page structure
+4. Extract: page title, all main navigation links, core feature areas
+   (VISUAL_ANALYZE optional — may help understand layout, not required)
 ```
 
-侦察完成后，输出以下格式并结束本轮回复。**本轮回复必须以这段内容结尾，不得在后面继续执行任何步骤：**
+After scouting, output the following and **end the response here. Do not proceed to any next step:**
 
 ---
-## 侦察结果 — {网站名称}
+## Scouting Results — {Website Name}
 
-发现以下功能模块：
-1. {模块A}（路径：{url}）
-2. {模块B}（路径：{url}）
-3. {模块C}（路径：{url}）
-4. {模块D}（路径：{url}）
+Modules found:
+1. {Module A} (path: {url})
+2. {Module B} (path: {url})
+3. {Module C} (path: {url})
+4. {Module D} (path: {url})
 
-💡 建议优先记录（适合新手）：{列出 2-4 个}
+💡 Recommended for beginners: {list 2–4 core modules}
 
-**请选择要记录的模块编号（如 "1 3"），或回复"按建议来"。**
-**收到你的回复后，我才会开始探索和截图。**
-
----
-
-> Phase 2 和后续步骤在收到用户模块选择前不得启动。
-> 当前状态：等待用户输入。
+**Reply with the module numbers you want (e.g. "1 3"), or say "use recommendation".**
+**I will not start exploring or taking screenshots until I receive your reply.**
 
 ---
 
-### Phase 2：登录墙检测与处理
+> Phase 2 and beyond must not start until the user has selected modules.
+> Current status: waiting for user input.
 
-#### 步骤一：先判断当前登录状态
+---
 
-导航到目标页面后，**先检查是否已登录**，不要假设未登录：
+### Phase 2: Login Wall Detection & Handling
+
+#### Step 1: Check current login state
+
+After navigating to the target page, **check if already logged in — do not assume otherwise:**
 
 ```
 CAPTURE → shot_login_check.png
 READ_PAGE(compact)
 
-检查已登录信号（满足任意一项 → 已登录，直接进入 Phase 3）：
-  ✅ 页面显示用户头像、用户名、邮箱地址
-  ✅ URL 是 /dashboard、/home、/console、/app 等后台路径
-  ✅ 页面存在"退出登录"/"Sign Out"/"Log Out"按钮
-  ✅ 顶部导航含个人账户菜单
+Logged-in signals (any one → already logged in, proceed to Phase 3):
+  ✅ Page shows user avatar, username, or email address
+  ✅ URL is /dashboard, /home, /console, /app or similar
+  ✅ Page has a "Sign Out" / "Log Out" button
+  ✅ Top nav contains a personal account menu
 
-检查未登录信号（满足任意一项 → 未登录，进入步骤二）：
-  ❌ URL 包含 /login、/signin、/auth
-  ❌ 页面存在密码输入框且无用户信息
-  ❌ 出现"请登录"/"Sign in to continue"提示
-  ❌ 页面主体为空或被登录遮罩覆盖
+Logged-out signals (any one → not logged in, go to Step 2):
+  ❌ URL contains /login, /signin, /auth
+  ❌ Page has a password input field and no user info
+  ❌ Page shows "Please log in" / "Sign in to continue"
+  ❌ Page body is empty or covered by a login overlay
 ```
 
 ---
 
-#### 步骤二：分析登录页，识别可用方式
+#### Step 2: Analyze login page to identify available methods
 
-**不要直接问用户，先读取登录页结构：**
+**Do not ask the user yet — first read the login page structure:**
 
 ```
-READ_PAGE(full) 分析登录表单，识别以下元素：
-  - HAS_EMAIL_PASSWORD = 页面存在邮箱输入框 + 密码输入框
-  - HAS_GOOGLE         = 页面含 "Continue with Google" / Google 图标按钮
-  - HAS_GITHUB         = 页面含 "Continue with GitHub" / GitHub 图标按钮
-  - HAS_OTHER_OAUTH    = 页面含其他第三方登录按钮（记录名称）
-  - HAS_MAGIC_LINK     = 页面含 "发送登录链接"/"Send magic link" 选项
-  - HAS_SMS_CODE       = 页面含手机号输入框
+READ_PAGE(full) — identify:
+  - HAS_EMAIL_PASSWORD = email input + password input present
+  - HAS_GOOGLE         = "Continue with Google" / Google icon button present
+  - HAS_GITHUB         = "Continue with GitHub" / GitHub icon button present
+  - HAS_OTHER_OAUTH    = other third-party login buttons (note the name)
+  - HAS_MAGIC_LINK     = "Send magic link" / "Email me a link" option present
+  - HAS_SMS_CODE       = phone number input present
 ```
 
-根据识别结果，**只列出实际存在的选项**询问用户：
+Then ask the user, **listing only the methods actually detected:**
 
 ```
 IF HAS_EMAIL_PASSWORD AND (HAS_GOOGLE OR HAS_OTHER_OAUTH):
-  → 提示列出所有检测到的方式，让用户选择
+  → List all detected options and let the user choose
 
-ELSE IF HAS_EMAIL_PASSWORD ONLY:
-  → 提示："该页面需要邮箱密码登录，请提供邮箱和密码"
+ELSE IF HAS_EMAIL_PASSWORD only:
+  → "This page requires email/password login. Please provide your email and password."
 
-ELSE IF ONLY OAuth（无密码表单）:
-  → 提示："该页面只支持 {OAuth名称} 登录，需要你在浏览器中手动完成授权"
+ELSE IF OAuth only (no password form):
+  → "This page only supports {OAuth name} login. Please complete authorization in your browser."
 ```
 
 ---
 
-#### 步骤三：执行登录
+#### Step 3: Execute login
 
-**策略 A：邮箱/密码登录**
-
+**Strategy A: Email / password**
 ```
-CLICK(邮箱输入框)
-TYPE(邮箱输入框, 用户提供的邮箱)
-CLICK(密码输入框) 或 PRESS_KEY(Tab)
-TYPE(密码输入框, 用户提供的密码)
-CLICK(登录按钮)
-等待页面响应（最多 10s）
-```
-
-**策略 B：验证码（提交后触发）**
-
-```
-IF 提交后出现验证码输入框:
-  → 暂停，提示用户："已向 {邮箱/手机号} 发送验证码，请告诉我收到的验证码"
-  → 等待用户输入
-  TYPE(验证码输入框, 用户提供的验证码)
-  CLICK(确认按钮)
+CLICK(email field)
+TYPE(email field, user-provided email)
+PRESS_KEY(Tab) or CLICK(password field)
+TYPE(password field, user-provided password)
+CLICK(login button)
+Wait up to 10s for response
 ```
 
-**策略 C：OAuth 第三方登录**
-
+**Strategy B: Verification code (triggered after submit)**
 ```
-CLICK(OAuth 按钮)
-→ 暂停自动化，提示用户在浏览器中完成授权，完成后告知继续
+IF a verification code input appears after submitting:
+  → Pause: "A code has been sent to {email/phone}. Please share the code."
+  → Wait for user input
+  TYPE(code field, code provided by user)
+  CLICK(confirm button)
 ```
 
-**策略 D：跳过登录**
-
+**Strategy C: OAuth**
 ```
-记录：以下模块因需要登录已跳过：{模块列表}
-在教程中标注"⚠️ 此功能需要登录后使用"
-直接进入 Phase 3（跳过需登录的模块）
+CLICK(OAuth button)
+→ Pause automation: "The {Google/GitHub} authorization page is open. Please complete login in your browser, then let me know."
+→ Wait for user confirmation
+```
+
+**Strategy D: Skip login**
+```
+Record: the following modules were skipped (login required): {module list}
+Mark skipped sections in tutorial as "⚠️ This feature requires login."
+Proceed to Phase 3 with public-only modules.
 ```
 
 ---
 
-#### 步骤四：登录成功验证
+#### Step 4: Verify login success
 
 ```
 CAPTURE → shot_login_verify.png
 READ_PAGE(compact)
 
-检查已登录信号（同步骤一）：
-  IF 通过 → 进入 Phase 3
-  IF 失败 → 提示用户确认账密，返回步骤三重试（最多 2 次）
+Check logged-in signals (same as Step 1):
+  IF passed → proceed to Phase 3
+  IF failed → "Login did not succeed. Please check your credentials or choose another method."
+             → Return to Step 3, retry up to 2 times
 ```
 
 ---
 
-### Phase 3：逐模块探索
+### Phase 3: Module Exploration
 
-**视频录制初始化（仅 video 格式需要）：**
-
-```
-IF 输出格式包含 video:
-
-  按优先级检测可用录制方案，选第一个可用的：
-    方案 A — SCREEN_RECORD 可用          → RECORD_MODE = "native"
-    方案 B — 浏览器由 Playwright 驱动    → RECORD_MODE = "playwright"（启动时配置录制目录）
-    方案 C — macOS 系统（screencapture） → RECORD_MODE = "screencapture"
-    方案 D — Linux 系统（recordmydesktop）→ RECORD_MODE = "recordmydesktop"
-    方案 E — 仅有 ffmpeg                 → RECORD_MODE = "slideshow"（截图序列合成）
-    方案 F — 无任何工具                  → RECORD_MODE = "none"，告知用户并跳过视频
-
-  启动录制（按 RECORD_MODE 使用对应命令）
-  记录开始时间 T0（毫秒）
-  初始化 subtitles = []
-```
-
-**截图规则（强制，不得省略）：**
-- 每个模块进入时：CAPTURE 1 张首屏
-- 每个操作步骤：操作前 CAPTURE 1 张 + 操作后 CAPTURE 1 张
-- 弹窗/模态框/下拉菜单出现时：额外 CAPTURE 1 张
-- 最低保底：总截图数 ≥ 模块数 × 3
-
-⚠️ **Phase 3 期间严禁使用 ANNOTATE（带红框标注的截图模式）。**
-
-找元素用 `READ_PAGE(compact)`，它直接返回所有交互元素的 ref，不需要视觉标注：
+**Video recording initialization (video format only):**
 
 ```
-READ_PAGE(compact) → 返回 e1、e2、e3... 元素列表
-CLICK(e3)          → 直接用 ref 点击，不需要看红框图
+IF output format includes video:
+
+  Detect available recording method in priority order, use the first available:
+    Option A — SCREEN_RECORD available           → RECORD_MODE = "native"
+    Option B — Browser driven by Playwright      → RECORD_MODE = "playwright" (set record_video_dir at launch)
+    Option C — macOS system (screencapture)      → RECORD_MODE = "screencapture"
+    Option D — Linux system (recordmydesktop)    → RECORD_MODE = "recordmydesktop"
+    Option E — Only ffmpeg available             → RECORD_MODE = "slideshow" (compose from screenshots)
+    Option F — No tools available                → RECORD_MODE = "none", inform user, skip video
+
+  Start recording (use the appropriate command for RECORD_MODE)
+  Record start time T0 (milliseconds)
+  Initialize click_events = [], subtitles = []
 ```
 
-Phase 3 截图只有两种调用，严格按顺序：
+**Screenshot rules (mandatory, no exceptions):**
+- On entering each module: 1 CAPTURE (overview)
+- Each action step: 1 CAPTURE before + 1 CAPTURE after
+- On modal / dropdown / toast appearing: 1 extra CAPTURE
+- Minimum guarantee: total screenshots ≥ modules × 3
+
+⚠️ **During Phase 3, ANNOTATE mode is strictly forbidden.**
+Use `READ_PAGE(compact)` to get element refs for navigation — it returns a text list (e1, e2…) with no visual markers:
 
 ```
-第一步：CAPTURE → shot_xxx.png        ← 存干净截图，不带任何标注参数
-第二步：READ_PAGE(compact)            ← 读元素 ref，用于导航（不截图）
-第三步：执行操作（CLICK / TYPE）
-第四步：CAPTURE → shot_xxx_after.png  ← 存干净截图
+READ_PAGE(compact) → returns element list with refs
+CLICK(e3)          → click directly using ref, no annotated screenshot needed
 ```
 
-VISUAL_ANALYZE（无标注的视觉分析）可选调用，但其输出仅供理解页面内容，**不保存为教程截图，不替代 CAPTURE**。
+Screenshots use only two calls, strictly in order:
 
-对每个确认的模块：
+```
+Step 1: CAPTURE → shot_xxx.png          ← save clean screenshot (no annotation flags)
+Step 2: READ_PAGE(compact)              ← get element refs for navigation (no screenshot)
+Step 3: execute action (CLICK / TYPE)
+Step 4: CAPTURE → shot_xxx_after.png   ← save clean screenshot
+```
+
+VISUAL_ANALYZE (non-annotated) may optionally be called to understand page content, but **its output is not saved as a tutorial screenshot and does not replace CAPTURE.**
+
+For each confirmed module:
 
 ```
 FOR each module in confirmed_scope:
 
-  【模块首屏】
+  [Module overview]
   1. NAVIGATE(module_url)
-  2. 等待页面加载完成
-  3. CAPTURE → shot_{nn}_{module}_overview.png        ← 先保存
-  4. READ_PAGE(compact)                               ← 理解页面结构
-  5. VISUAL_ANALYZE（可选，失败跳过）
-  6. 记录：URL、页面标题
+  2. Wait for page to finish loading
+  3. CAPTURE → shot_{nn}_{module}_overview.png
+  4. READ_PAGE(compact)
+  5. VISUAL_ANALYZE (optional, skip on failure)
+  6. Record: URL, page title
 
-  【逐步操作】
+  [Step-by-step actions]
   FOR each step:
-    a. CAPTURE → shot_{nn}_step{s}_before.png          ← 先保存干净截图
-    b. IF +sub OR +audio: 记录 T_start = now() - T0
-    c. IF video 格式:
-         获取操作目标的屏幕坐标 (x, y)（从元素 ref 或 bounding box）
-         wait(1.5s)                                    ← 停顿，让观众找到视线焦点
-         记录 click_events.append({ t: now()-T0, x, y })
-    d. 执行操作（CLICK / TYPE / PRESS_KEY）
-    e. 等待页面响应（最多 3s）
-    f. CAPTURE → shot_{nn}_step{s}_after.png           ← 先保存干净截图
-    g. VISUAL_ANALYZE（可选，失败跳过）
+    a. CAPTURE → shot_{nn}_step{s}_before.png
+    b. IF +sub OR +audio: record T_start = now() - T0
+    c. IF video format:
+         get action target screen coordinates (x, y) from element ref or bounding box
+         wait(1.5s)                              ← pause so viewer can find visual focus
+         click_events.append({ t: now()-T0, x, y })
+    d. Execute action (CLICK / TYPE / PRESS_KEY)
+    e. Wait for page response (up to 3s)
+    f. CAPTURE → shot_{nn}_step{s}_after.png
+    g. VISUAL_ANALYZE (optional, skip on failure — does not affect saved screenshots)
     h. IF +sub OR +audio:
-         subtitles.append({ start: T_start, end: now()-T0+1500, text: "{步骤描述}" })
-    i. 记录步骤：{操作描述 + 预期结果}
+         subtitles.append({ start: T_start, end: now()-T0+1500, text: "{step description}" })
+    i. Record step: {action description + expected result}
 
-  【额外截图时机】
-  出现弹窗/模态框  → CAPTURE → shot_{nn}_step{s}_modal.png
-  出现下拉菜单    → CAPTURE → shot_{nn}_step{s}_dropdown.png
-  需要滚动查看    → 滚动后 CAPTURE → shot_{nn}_step{s}_scroll.png
+  [Extra screenshot triggers]
+  Modal / overlay appears    → CAPTURE → shot_{nn}_step{s}_modal.png
+  Dropdown / tooltip appears → CAPTURE → shot_{nn}_step{s}_dropdown.png
+  Page needs scrolling       → scroll, then CAPTURE → shot_{nn}_step{s}_scroll.png
 ```
 
-⛔ **禁止：**
-- 因"页面变化不大"跳过截图
-- 因"已有类似截图"复用截图
-- 用 VISUAL_ANALYZE 替代 CAPTURE
+⛔ **Prohibited:**
+- Skipping a screenshot because "the page didn't change much"
+- Reusing a previous screenshot for a different step
+- Using VISUAL_ANALYZE output as a tutorial screenshot
+- Using ANNOTATE / annotated screenshots anywhere in Phase 3
 
 ---
 
-**操作类型分类处理：**
+**Action type classification:**
 
-| 操作类型 | 是否执行 | 截图策略 |
-|---------|---------|---------|
-| 浏览 / 查看 | ✅ 完整执行 | 进入前 + 关键内容区 |
-| 创建 / 新增 | ✅ 完整执行，用示例数据填写 | 空表单 + 填写中 + 创建成功后 |
-| 编辑 / 修改 | ✅ 用示例数据执行，保存后可还原 | 原始内容 + 编辑表单 + 保存结果 |
-| 删除 | ⚠️ 截图到确认弹窗后点取消，不实际删除 | 触发按钮 + 确认弹窗 + 取消后 |
-| 支付 / 充值 | ❌ 不执行，截图到支付页即止 | 入口按钮 + 支付页全览 |
-| 权限 / 账户设置 | ⚠️ 仅截图展示，不修改任何配置 | 设置页全览 + 关键选项区 |
+| Action type | Execute? | Screenshot strategy |
+|------------|---------|-------------------|
+| Browse / view | ✅ Full execution | On entry + key content areas |
+| Create / add | ✅ Full execution, use sample data | Empty form + filling + success state |
+| Edit / modify | ✅ Use sample data, revert after if needed | Original + edit form + saved result |
+| Delete | ⚠️ Screenshot to confirmation dialog, then cancel | Trigger + confirm dialog + after cancel |
+| Payment / top-up | ❌ Screenshot to payment page only, do not proceed | Entry button + payment page overview |
+| Permissions / account settings | ⚠️ Screenshot only, do not change anything | Settings overview + key option areas |
 
-**编辑操作步骤：**
+**Edit step-by-step:**
 ```
-1. CAPTURE → 记录原始状态
-2. CLICK(编辑入口)
-3. CAPTURE → 记录表单打开状态
-4. TYPE(各字段, 示例数据)
-5. CAPTURE → 记录填写完成状态
-6. CLICK(保存按钮)
-7. CAPTURE → 记录保存结果
+1. CAPTURE → record original state
+2. CLICK(edit entry point)
+3. CAPTURE → record edit form open
+4. TYPE(each field, sample data)
+5. CAPTURE → record filled-in state
+6. CLICK(save button)
+7. CAPTURE → record saved result
+Note in tutorial: "Replace sample data with your own content."
 ```
 
-**删除操作步骤：**
+**Delete step-by-step:**
 ```
-1. CAPTURE → 记录目标项存在状态
-2. CLICK(删除入口)
-3. CAPTURE → 记录触发方式
-4. IF 出现确认弹窗:
-     CAPTURE → 记录确认弹窗
-     CLICK(取消按钮)        ← 不点确认，不实际删除
-     CAPTURE → 记录取消后恢复
-5. 教程中说明："⚠️ 点击确认后永久删除，无法恢复"
+1. CAPTURE → record target item exists
+2. CLICK(delete entry: right-click menu / delete button / kebab menu)
+3. CAPTURE → record how delete was triggered
+4. IF confirmation dialog appears:
+     CAPTURE → record the dialog (including warning text)
+     CLICK(cancel button)     ← do NOT click confirm
+     CAPTURE → record page returned to normal
+5. Add to tutorial: "⚠️ Clicking Confirm permanently deletes this item and cannot be undone."
 ```
 
 ---
 
-### Phase 4：汇总与生成教程
+### Phase 4: Compile & Generate Tutorial
 
-**教程结构模板：**
+**Tutorial template:**
 
 ````markdown
-# {网站名称} 使用教程
+# {Website Name} — Tutorial
 
-> 本教程面向：{目标读者}
-> 更新时间：{date}
+> Audience: {target audience}
+> Language: {output language}
+> Updated: {date}
 
-## 目录
-{自动生成}
-
----
-
-## 准备工作
-{登录/注册说明（如有）}
+## Table of Contents
+{auto-generated}
 
 ---
 
-## {模块A} 使用指南
+## Prerequisites
+{login / registration notes if applicable}
 
-### 第 1 步：{操作描述}
+---
 
-![{操作描述}]({screenshot_path})
+## {Module A} Guide
 
-{1-2 句说明 WHY 和注意事项}
+### Step 1: {action description}
 
-### 第 2 步：{操作描述}
+![{action description}]({screenshot_path})
+
+{1–2 sentences explaining WHY and any caveats}
+
+### Step 2: {action description}
 ...
 
 ---
 
-## 常见问题
-{探索过程中遇到的异常/提示，整理为 Q&A}
+## {Module B} Guide
+...
+
+---
+
+## FAQ
+{exceptions / prompts encountered during exploration, formatted as Q&A}
 ````
 
-**截图标注（可选后处理，非实时标注）：**
-- 如需标注，在教程生成阶段对已保存的干净截图进行后处理
-- 标注内容：用红框圈出操作区域、箭头指向关键按钮
-- **不使用 ANNOTATE 的实时标注模式**——那会把 Agent 的导航编号（@e1 @e2）暴露给读者
+**Screenshot annotation (if ANNOTATE capability is available as post-processing):**
+- Annotate saved clean screenshots after exploration is complete
+- Mark click/input areas with a red box or arrow
+- Do NOT use live ANNOTATE mode during Phase 3
 
 ---
 
-### Phase 5：输出与交付
+### Phase 5: Output & Delivery
 
-**基础输出（所有格式共用）：**
+**Base output (all formats):**
 ```
-截图统一保存到：{网站域名}/screenshots/
-命名规范：shot_{nn}_{module}_{step}_{before|after}.png
-```
-
-**Markdown：**
-```
-输出：{网站域名}-tutorial.md
-截图引用：![描述](screenshots/shot_xx_xxx.png)  ← 相对路径
+Screenshots saved to: {domain}/screenshots/
+Naming: shot_{nn}_{module}_{step}_{before|after}.png
 ```
 
-**HTML：**
+**Markdown:**
 ```
-输出：{网站域名}-tutorial.html
-截图内嵌为 base64，添加基础 CSS，单文件可直接分享
-```
-
-**PDF：**
-```
-依赖检测（优先级）：pandoc → wkhtmltopdf → 降级输出 HTML + 提示用浏览器打印
+Output: {domain}-tutorial.md
+Screenshot refs: ![desc](screenshots/shot_xx_xxx.png)  ← relative paths
 ```
 
-**视频合成（video 格式）：**
+**HTML:**
 ```
-1. 停止录制（按 RECORD_MODE 对应方式）
-2. IF +sub OR +audio: 生成 SRT 字幕文件
-
-   字幕时间轴按 RECORD_MODE 分两套计算方式，不可混用：
-
-   【真实录屏模式（native / playwright / screencapture / recordmydesktop）】
-   使用 Phase 3 记录的真实时间戳：
-     字幕 N 的 start = T_start_N，end = T_end_N + 1500ms
-   但需修正浏览器加载偏差：
-     对每条字幕，end - start < 1500ms 时，自动补齐到 1500ms（保证可读性）
-
-   【截图序列模式（slideshow）】
-   ⚠️ 不使用 T_start/T_end，改为按图片顺序计算：
-     每张截图固定显示时长 = SLIDE_DURATION（默认 3.0s，可在 Phase 0 配置）
-     字幕 N 的 start = N × SLIDE_DURATION
-     字幕 N 的 end   = (N+1) × SLIDE_DURATION - 0.2s（留 0.2s 间隔）
-     TTS 音频时长裁剪/补齐到 SLIDE_DURATION 秒内
-
-3. IF +audio: 用 TTS 生成旁白（优先级：edge-tts → OpenAI TTS → say → gtts）
-
-   TTS 音频时长对齐：
-   【真实录屏】每段音频自然时长，不强制裁剪；若超出字幕窗口，加速播放（atempo=1.2）
-   【slideshow】每段音频必须 ≤ SLIDE_DURATION，超出时：
-     优先加速播放（atempo 最大 1.5x）
-     仍超出则截断，在教程文字里标注"（旁白已截短）"
-
-4. ffmpeg 合成 MP4（按 RECORD_MODE 选输入源，按选项叠加字幕/音频）
-
-   【slideshow 专用合成命令】
-   ffmpeg -framerate 1/SLIDE_DURATION \
-     -pattern_type glob -i 'screenshots/shot_*.png' \
-     -i narration.mp3 \
-     -vf "subtitles=tutorial.srt:force_style='FontSize=22,...'" \
-     -c:v libx264 -pix_fmt yuv420p \
-     -c:a aac -shortest \
-     tutorial.mp4
-
-   IF video 格式 AND click_events 不为空:
-     在合成前插入 zoom 聚焦后处理：
-
-     为每个 click_event { t, x, y } 生成 zoompan 片段：
-       zoom_in  时间段：t-0.3s → t+0.5s  缩放 1.0→1.3（推进）
-       zoom_out 时间段：t+0.5s → t+1.2s  缩放 1.3→1.0（拉回）
-       zoom 中心：(x, y) 对应的画面坐标
-
-     ffmpeg zoompan 滤镜示例（单次点击，坐标归一化到画面）：
-       -vf "zoompan=
-              z='if(between(t,{t-0.3},{t+1.2}), 1+0.3*sin(PI*(t-{t-0.3})/1.5), 1)':
-              x='({x}/W)*(W-iw/zoom)':
-              y='({y}/H)*(H-ih/zoom)':
-              d=1:s=1280x720"
-
-     多个点击事件时，用逗号串联多段 zoompan 条件
-
-     IF 无法获取点击坐标（工具不支持返回 bounding box）:
-       降级为居中 zoom：每步操作后对画面中心做 1.0→1.2→1.0 缓慢缩放
-       -vf "zoompan=z='1+0.2*sin(PI*t/2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1"
-
-5. 清理临时文件
-
-TTS 优先级：
-  edge-tts（免费，质量好）→ OpenAI TTS（需 API Key）→ macOS say（内置）→ gtts → 降级为纯字幕
-
-视频选项组合：
-  "video"           = 纯录屏
-  "video+sub"       = 录屏 + 字幕烧录
-  "video+audio"     = 录屏 + TTS 旁白
-  "video+sub+audio" = 录屏 + 字幕 + 旁白
+Output: {domain}-tutorial.html
+Screenshots embedded as base64 — single self-contained file, shareable directly
+Include basic CSS (font, spacing, step numbering, max-width images)
 ```
 
-**交付确认：**
+**PDF:**
 ```
-列出所有生成的文件 → 展示教程前 30 行预览 → 询问是否补充或转换格式
+Dependency check (in order): pandoc → wkhtmltopdf → fallback to HTML + suggest browser print-to-PDF
+```
+
+**Video (video format):**
+
+```
+1. Stop recording (method depends on RECORD_MODE)
+
+2. IF +sub OR +audio: generate SRT subtitle file
+   Timing calculation — two separate strategies, do NOT mix:
+
+   [Real recording mode — native / playwright / screencapture / recordmydesktop]
+   Use actual timestamps from Phase 3:
+     subtitle N: start = T_start_N, end = T_end_N + 1500ms
+     If end - start < 1500ms, pad to 1500ms minimum
+
+   [Slideshow mode]
+   ⚠️ Do NOT use T_start / T_end. Calculate from image sequence:
+     SLIDE_DURATION = value from +slide=N (default 3.0s)
+     subtitle N: start = N × SLIDE_DURATION
+     subtitle N: end   = (N+1) × SLIDE_DURATION - 0.2s
+     TTS audio must be trimmed / sped up to fit within SLIDE_DURATION
+
+3. IF +audio: generate TTS narration
+   Priority: edge-tts → OpenAI TTS → macOS say → gtts → fallback to subtitles only
+
+   Audio duration alignment:
+   [Real recording] natural duration; if longer than subtitle window, speed up (atempo=1.2 max)
+   [Slideshow] must be ≤ SLIDE_DURATION; speed up first (atempo max 1.5x), truncate if still over
+
+4. Compose final MP4 with ffmpeg
+   Input source depends on RECORD_MODE
+   Overlay subtitles if +sub
+   Mix narration audio if +audio
+   
+   IF click_events is not empty (video format):
+     Apply zoompan focus effect at each click:
+       zoom in  t-0.3s → t+0.5s: scale 1.0 → 1.3
+       zoom out t+0.5s → t+1.2s: scale 1.3 → 1.0
+       center on (x, y) coordinates of the click
+     IF coordinates unavailable: fallback to center zoom (1.0 → 1.2 → 1.0)
+
+   Slideshow compose command:
+     ffmpeg -framerate 1/SLIDE_DURATION \
+       -pattern_type glob -i 'screenshots/shot_*.png' \
+       -i narration.mp3 \
+       -vf "subtitles=tutorial.srt:force_style='FontSize=22,...'" \
+       -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \
+       tutorial.mp4
+
+5. Clean up temp files (keep final MP4 and SRT)
+```
+
+**Delivery confirmation:**
+```
+List all generated files:
+  ✅ {domain}-tutorial.md       (if applicable)
+  ✅ {domain}-tutorial.html     (if applicable)
+  ✅ {domain}-tutorial.pdf      (if applicable)
+  ✅ {domain}-tutorial.mp4      (if applicable, with subtitles/narration)
+  ✅ {domain}-tutorial.srt      (if applicable)
+  📁 screenshots/ — {n} screenshots
+
+Show tutorial preview (first 30 lines)
+
+Ask: "Do you want to add any modules, re-explore any step, or export to another format?"
 ```
 
 ---
 
-## 错误处理
+## Error Handling
 
-| 情况 | 处理方式 |
-|------|---------|
-| 页面加载超时 | 等待 5s 重试一次，失败则跳过并记录 |
-| 元素找不到 | READ_PAGE 重新获取最新元素引用，再重试一次；仍失败则 CAPTURE 整页继续，不中断 |
-| 弹窗/遮罩阻挡 | PRESS_KEY(Esc) 或点击遮罩关闭；失败则记录为已知问题 |
-| VISUAL_ANALYZE 失败 | 直接跳过，不重试；截图由独立 CAPTURE 保证 |
-| 截图数量不足 | 探索结束后清点，不足则补截再进入 Phase 4 |
-| 无浏览器工具 | 降级为 fetch + HTML 解析，生成纯文字步骤（无截图） |
-| 动态内容加载慢 | CAPTURE 前等待 2s，或等待特定元素出现 |
-| TTS 全部不可用 | 降级为纯字幕（+sub），告知用户 |
-| ffmpeg 不可用 | 跳过视频合成，保留截图序列，提示用户安装 |
+| Situation | Action |
+|-----------|--------|
+| Page load timeout | Wait 5s, retry once; skip and log if still failing |
+| Element not found | READ_PAGE to refresh refs, retry once; if still failing, CAPTURE full page and continue |
+| Modal / overlay blocking | PRESS_KEY(Esc) or click overlay to dismiss; log as known issue if it persists |
+| VISUAL_ANALYZE failure | Skip immediately, no retry; CAPTURE is independent and unaffected |
+| Screenshot count too low (< modules × 3) | After exploration, identify missing screenshots and re-capture before Phase 4 |
+| No browser tools available | Fallback to fetch + HTML parsing; generate text-only tutorial (no screenshots) |
+| Slow dynamic content | Wait 2s before CAPTURE, or wait for a specific element to appear |
+| TTS unavailable | Fallback to subtitles only (+sub), inform user |
+| ffmpeg unavailable | Skip video composition; keep screenshot sequence; suggest installing ffmpeg |
 
 ---
 
-## 关键原则
+## Key Principles
 
-1. **先确认范围，再动手** — 不要在用户未确认前探索所有链接
-2. **CAPTURE 独立调用** — 截图必须先保存文件，不依赖视觉分析工具
-3. **操作前后各一张图** — 让读者看到"点什么"和"变成什么"
-4. **Phase 3 禁用 ANNOTATE** — 导航用 READ_PAGE 拿 ref，绝不用带红框标注的截图存入教程
-5. **VISUAL_ANALYZE 是增强，不是依赖** — 失败直接跳过，不影响主流程；其输出不保存为截图
-6. **遇到登录墙必须暂停** — 不尝试猜测或绕过认证
-7. **步骤描述用祈使句** — "点击「登录」按钮"而非"用户需要点击"
+1. **Confirm scope before acting** — never explore links before the user has confirmed the module list
+2. **CAPTURE is always independent** — screenshots must be saved separately from any visual analysis tool
+3. **One screenshot before, one after** — show the viewer "what to click" and "what it looks like after"
+4. **ANNOTATE is banned in Phase 3** — use READ_PAGE for element refs; never save annotated screenshots to the tutorial
+5. **VISUAL_ANALYZE is an enhancement, not a dependency** — skip on failure; its output is never saved as a screenshot
+6. **Always pause at login walls** — never guess or bypass authentication
+7. **Use imperative voice for steps** — "Click the Login button" not "The user should click"
+8. **Match output language to user's choice** — generate all tutorial text (headings, descriptions, captions, narration) in the language selected in Phase 0
