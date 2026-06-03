@@ -72,6 +72,32 @@ Agent 会按以下流程执行：
 5. **Phase 4** — 汇总截图和步骤，生成教程
 6. **Phase 5** — 输出文件，展示预览，询问是否补充
 
+### 教程语言
+
+生成的教程支持任意语言，在请求中指定或在 Phase 0 时选择：
+
+```
+生成 https://example.com 的教程，语言：中文
+生成 https://example.com 的教程，语言：日本語
+生成 https://example.com 的教程，语言：English
+```
+
+支持的语言包括（不限于）：
+
+| 语言 | 写法 |
+|------|------|
+| English（默认） | `English` |
+| 简体中文 | `中文` |
+| 日本語 | `日本語` |
+| 한국어 | `한국어` |
+| Español | `Español` |
+| Français | `Français` |
+| Deutsch | `Deutsch` |
+| Português | `Português` |
+| العربية | `العربية` |
+
+教程的所有文字内容——标题、步骤描述、图注、TTS 旁白——都会用所选语言生成。
+
 ### 输出格式示例
 
 ```
@@ -115,41 +141,6 @@ Agent 会按以下流程执行：
     ├── shot_02_step1_after.png
     └── ...
 ```
-
-## 示例
-
-### XRoute.AI — 带字幕和旁白的视频教程
-
-为 https://xroute.ai/ 生成的完整教程，覆盖 5 个模块：
-- 注册账户（邮箱验证码）
-- API 密钥管理
-- 购买额度
-- 浏览模型（84 个模型）
-- 对话功能
-
-**输出文件：**
-
-| 文件 | 说明 |
-|------|------|
-| [`examples/xroute.ai/XRoute-tutorial.md`](examples/xroute.ai/XRoute-tutorial.md) | Markdown 教程（18 张截图） |
-| [`examples/xroute.ai/xroute-tutorial.mp4`](examples/xroute.ai/xroute-tutorial.mp4) | 视频教程（2 分钟，带 TTS 旁白） |
-| [`examples/xroute.ai/tutorial.srt`](examples/xroute.ai/tutorial.srt) | SRT 字幕 |
-| [`examples/xroute.ai/narration.mp3`](examples/xroute.ai/narration.mp3) | TTS 旁白音频 |
-| [`examples/xroute.ai/screenshots/`](examples/xroute.ai/screenshots/) | 18 张操作截图 |
-
-**生成方式：**
-
-```
-为 https://xroute.ai/ 生成视频教程，带字幕和旁白
-```
-
-Agent 自动完成：
-1. 探索网站并列出 6 个模块
-2. 处理邮箱验证码登录流程
-3. 截取 18 张截图（操作前后各一张）
-4. 使用 edge-tts（zh-CN-YunxiNeural）生成中文旁白
-5. 将每张图的显示时长与旁白时长同步
-6. 输出带旁白的 MP4 视频
 
 ## 能力映射
 
