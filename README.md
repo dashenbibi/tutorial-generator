@@ -1,180 +1,167 @@
-# 🎬 Tutorial Generator
+[中文](./README.zh-CN.md) | **English**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![AI Skill](https://img.shields.io/badge/AI%20Skill-Compatible-green.svg)](#支持的工具)
-[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](#贡献)
+# tutorial-generator
 
-> **输入一个 URL，自动生成图文教程。** 支持 Markdown、HTML、PDF、视频（含字幕和 TTS 旁白）多种输出格式。
+An AI skill that automatically generates illustrated tutorials for any website. Input a URL, and the agent will explore pages, take screenshots, record action steps, and produce a polished tutorial — without writing a single line manually.
 
-一个**工具无关**的 AI Skill，让任何支持浏览器自动化的 AI Agent 都能录制操作流程、截图、生成教程。
+## Features
 
----
+- **Tool-agnostic** — uses abstract capability identifiers, works with any AI agent that supports browser automation
+- **Login handling** — detects login state automatically; supports email/password, verification code, and OAuth flows
+- **Rich screenshots** — before + after each step, plus extras for modals, dropdowns, and scroll areas; minimum 3 per module guaranteed
+- **Multiple output formats** — Markdown / HTML (base64 screenshots embedded) / PDF / Video
+- **Video support** — screen recording + optional SRT subtitle burn-in + optional TTS narration
+- **Safe by default** — delete actions stop at the confirm dialog; payment pages are screenshot-only
 
-## ✨ 特性
+## Supported Tools
 
-- 🔧 **工具无关** — 使用抽象能力标识符，适配 Claude Code / Hermes / Gemini CLI / Codex 等
-- 🔐 **登录处理** — 自动检测登录态，支持账密、验证码、OAuth 三种登录方式
-- 📸 **丰富截图** — 每步操作前后各截图，弹窗/下拉/滚动额外截图
-- 🎥 **多格式输出** — Markdown / HTML / PDF / 视频（含字幕 + TTS 旁白）
-- 🛡️ **安全边界** — 删除操作只截图到确认弹窗，支付页面只截图不点击
+| Tool | Browser | Login state | Video recording |
+|------|---------|-------------|----------------|
+| Claude Code (Claude in Chrome) | ✅ | Reuses real Chrome session | Via screencapture |
+| Hermes (NousResearch) | ✅ | CDP attach / persistent session | ✅ Native |
+| Gemini CLI | ✅ | Reuses real Chrome session | Via screencapture |
+| OpenHands | ✅ | ❌ Sandbox | Via recordmydesktop |
+| Codex (OpenAI) | ✅ In-app | ❌ Sandbox | Computer Use |
+| Any Playwright MCP tool | ✅ | Depends on config | Playwright built-in |
 
-## 🖼️ 输出示例
+## Installation
 
-```
-example.com/
-├── example.com-tutorial.md       # Markdown 教程
-├── example.com-tutorial.html     # HTML 教程（截图内嵌 base64）
-├── example.com-tutorial.pdf      # PDF 教程
-├── example.com-tutorial.mp4      # 视频教程（含字幕/旁白）
-├── example.com-tutorial.srt      # 字幕文件
-└── screenshots/
-    ├── shot_00_home.png
-    ├── shot_01_login.png
-    ├── shot_02_step_before.png
-    ├── shot_02_step_after.png
-    └── ...
-```
-
-## 🚀 快速开始
-
-### 安装
+**Option 1 — Clone to universal skills directory (recommended, works with all tools)**
 
 ```bash
-# 克隆到通用目录（推荐，所有工具可用）
 git clone https://github.com/dashenbibi/tutorial-generator ~/.skills/tutorial-generator
 ```
 
-<details>
-<summary>📦 其他安装方式</summary>
+**Option 2 — Download skill file only**
 
-**Claude Code 用户（通过 OpenClaw 安装）：**
-```bash
-# 在 Claude Code 中运行
-/install-skill tutorial-generator
-```
-
-**仅下载 skill 文件：**
 ```bash
 mkdir -p ~/.skills/tutorial-generator
 curl -o ~/.skills/tutorial-generator/SKILL.md \
   https://raw.githubusercontent.com/dashenbibi/tutorial-generator/main/SKILL.md
 ```
 
-**Claude Code 专用路径（自动加载）：**
+**Claude Code (auto-loaded):**
+
 ```bash
 mkdir -p ~/.claude/skills/tutorial-generator
 cp ~/.skills/tutorial-generator/SKILL.md ~/.claude/skills/tutorial-generator/SKILL.md
 ```
-</details>
 
-### 使用
+**Other tools (Hermes / Gemini CLI / Codex etc.):**
 
-向 AI Agent 发送：
+Add to system prompt or at the start of a session:
 
 ```
-生成 https://example.com 的使用教程
+Please read ~/.skills/tutorial-generator/SKILL.md before starting.
 ```
 
-Agent 会自动执行 6 个阶段：
+## Usage
 
-1. **Phase 0** — 询问目标读者、功能范围、登录信息、输出格式
-2. **Phase 1** — 侦察网站结构，展示发现的功能模块
-3. **Phase 2** — 检测登录状态，按需处理认证
-4. **Phase 3** — 逐模块探索，每步操作前后截图
-5. **Phase 4** — 汇总截图和步骤，生成教程
-6. **Phase 5** — 输出文件，展示预览
+Send a request to your AI agent:
 
-### 输出格式
+```
+Generate a tutorial for https://example.com
+```
 
-```bash
-# 仅 Markdown（默认）
-生成 https://example.com 的使用教程
+The agent will follow this workflow:
+
+1. **Phase 0** — Ask about target audience, features to cover, login info, output language, and format
+2. **Phase 1** — Scout the site structure, list discovered modules, **wait for you to pick scope**
+3. **Phase 2** — Check login state; handle authentication if needed
+4. **Phase 3** — Explore each module step-by-step with screenshots
+5. **Phase 4** — Compile all steps and screenshots into a tutorial
+6. **Phase 5** — Output files, show preview, ask if anything needs to be added
+
+### Output format examples
+
+```
+# Markdown only (default)
+Generate a tutorial for https://example.com
 
 # Markdown + HTML
-生成 https://example.com 的教程，输出格式：markdown html
+Generate a tutorial for https://example.com  format: markdown html
 
-# 视频 + 字幕 + TTS 旁白
-生成 https://example.com 的教程，输出格式：video+sub+audio
+# Video with subtitles and narration
+Generate a tutorial for https://example.com  format: video+sub+audio
 
-# 全套输出
-生成 https://example.com 的教程，输出格式：markdown html video+sub+audio
+# Full output
+Generate a tutorial for https://example.com  format: markdown html video+sub+audio
 ```
 
-## 🛠️ 支持的工具
+### Video format dependencies
 
-本 Skill 使用抽象能力标识符，理论上支持任何具备浏览器自动化能力的 AI Agent。以下工具已验证或社区反馈可用：
+| Feature | Dependency | Install |
+|---------|-----------|---------|
+| Video composition | ffmpeg | `brew install ffmpeg` |
+| TTS narration (recommended) | edge-tts | `pip install edge-tts` |
+| TTS narration (fallback) | gtts | `pip install gtts` |
+| PDF output | pandoc | `brew install pandoc` |
 
-| 工具 | 浏览器 | 登录态 | 视频录制 | 备注 |
-|------|--------|--------|----------|------|
-| **Claude Code** | ✅ | 复用真实 Chrome | 需配合 screencapture | Anthropic 官方 CLI |
-| **Hermes** (NousResearch) | ✅ | CDP 附加 / 持久化 Session | ✅ 原生支持 | 全功能 Agent |
-| **Gemini CLI** | ✅ | 复用真实 Chrome | 需配合 screencapture | Google 官方 CLI |
-| **Cursor** | ✅ | 复用浏览器 | 需配合 screencapture | AI IDE |
-| **Windsurf** | ✅ | 复用浏览器 | 需配合 screencapture | AI IDE |
-| **OpenHands** | ✅ | ❌ 沙箱 | 需配合 recordmydesktop | 开源 Agent |
-| **Codex** (OpenAI) | ✅ App 内 | ❌ 沙箱 | Computer Use | OpenAI 官方 |
-| 任意支持 **Playwright MCP** 的工具 | ✅ | 取决于配置 | Playwright 内置 | 通用方案 |
+All dependencies have automatic fallbacks — missing tools degrade gracefully rather than failing.
 
-> 💡 **OpenClaw 用户**：本 Skill 已发布到 OpenClaw 市场，可直接在 Claude Code 中搜索安装。
+## Output structure
 
-## 📋 依赖
+```
+{domain}/
+├── {domain}-tutorial.md
+├── {domain}-tutorial.html
+├── {domain}-tutorial.pdf
+├── {domain}-tutorial.mp4      (with subtitles / narration if requested)
+├── {domain}-tutorial.srt
+└── screenshots/
+    ├── shot_00_home.png
+    ├── shot_01_module_overview.png
+    ├── shot_02_step1_before.png
+    ├── shot_02_step1_after.png
+    └── ...
+```
 
-| 功能 | 依赖 | 安装 |
-|------|------|------|
-| 视频合成 | ffmpeg | `brew install ffmpeg` |
-| TTS 旁白（推荐） | edge-tts | `pip install edge-tts` |
-| TTS 旁白（备选） | gtts | `pip install gtts` |
-| PDF 输出 | pandoc | `brew install pandoc` |
+## Capability mapping
 
-> 无依赖时自动降级：视频 → 截图序列，TTS → 纯字幕，PDF → HTML。
+The skill uses abstract identifiers. Map them to your tool before running:
 
-## 🔧 能力映射
+| Identifier | Description |
+|-----------|-------------|
+| `NAVIGATE` | Open / navigate to a URL |
+| `CAPTURE` | Take a screenshot and save to file |
+| `READ_PAGE` | Read page structure (compact / full) |
+| `CLICK` | Click an element |
+| `TYPE` | Type text into a field |
+| `PRESS_KEY` | Press keyboard keys (optional) |
+| `RUN_JS` | Execute JavaScript (optional) |
+| `VISUAL_ANALYZE` | Screenshot + AI visual analysis (optional enhancement) |
+| `SCREEN_RECORD` | Start/stop screen recording (video format only) |
 
-Skill 使用抽象能力标识符，适配任何工具：
+> If your tool combines screenshot and visual analysis (e.g. Hermes `browser_vision`),
+> map both `CAPTURE` and `VISUAL_ANALYZE` to it.
 
-| 能力 | 说明 |
-|------|------|
-| `NAVIGATE` | 打开/跳转 URL |
-| `CAPTURE` | 截图并保存文件 |
-| `READ_PAGE` | 读取页面结构 |
-| `CLICK` | 点击元素 |
-| `TYPE` | 向输入框填写文字 |
-| `PRESS_KEY` | 键盘按键 |
-| `RUN_JS` | 执行 JS 表达式 |
-| `VISUAL_ANALYZE` | 截图 + AI 视觉分析 |
-| `SCREEN_RECORD` | 录制屏幕 |
+## Changelog
 
-## 📖 版本历史
+| Version | Changes |
+|---------|---------|
+| v3.2.0 | Pure English SKILL.md; separate bilingual README files |
+| v3.1.0 | Bilingual SKILL.md (English + Chinese inline) |
+| v3.0.0 | Full English rewrite; multi-language output support |
+| v2.0.0 | Abstract capability identifiers replace hard-coded tool names |
+| v1.9.0 | Decouple CAPTURE from VISUAL_ANALYZE |
+| v1.8.0 | Video add-ons: +sub / +audio combinable; TTS 5-tier fallback |
+| v1.7.0 | 5-tier screen recording detection |
+| v1.6.0 | Video output format with ffmpeg MP4 |
+| v1.5.0 | Phase 1 hard stop; browser_vision failure handling |
+| v1.4.0 | Markdown / HTML / PDF output formats |
+| v1.3.0 | Action type classification; edit/delete specialized handling |
+| v1.2.0 | Mandatory screenshot rules; minimum count guarantee |
+| v1.1.0 | Login handling by browser mode |
+| v1.0.0 | Initial release |
 
-| 版本 | 主要变化 |
-|------|---------|
-| v2.0.0 | 全面重构：抽象能力标识符替代硬编码工具名 |
-| v1.9.0 | CAPTURE 与 VISUAL_ANALYZE 解耦 |
-| v1.8.0 | 视频选项支持 +sub / +audio 可选组合 |
-| v1.7.0 | 录屏方案五档优先级检测 |
-| v1.6.0 | 新增视频输出格式 |
-| v1.5.0 | Phase 1 硬停止重构 |
-| v1.4.0 | 支持 Markdown / HTML / PDF |
-| v1.3.0 | 操作类型分类表 |
-| v1.2.0 | 强制截图规则 |
-| v1.1.0 | 登录处理按浏览器模式分流 |
-| v1.0.0 | 初始版本 |
+## Contributing
 
-## 🤝 贡献
+Issues and PRs welcome:
+- Add capability mapping examples for new tools
+- Improve login handling logic
+- Add new output format support
+- Fix execution issues on specific platforms
 
-欢迎提 Issue 或 PR：
-
-- 补充新工具的能力映射示例
-- 改进登录处理逻辑
-- 新增输出格式支持
-- 修复在特定工具上的执行问题
-
-## 📄 License
+## License
 
 MIT
-
----
-
-<p align="center">
-  <i>如果这个项目对你有帮助，欢迎 ⭐ Star 支持！</i>
-</p>
