@@ -116,6 +116,41 @@ Agent 会按以下流程执行：
     └── ...
 ```
 
+## 示例
+
+### XRoute.AI — 带字幕和旁白的视频教程
+
+为 https://xroute.ai/ 生成的完整教程，覆盖 5 个模块：
+- 注册账户（邮箱验证码）
+- API 密钥管理
+- 购买额度
+- 浏览模型（84 个模型）
+- 对话功能
+
+**输出文件：**
+
+| 文件 | 说明 |
+|------|------|
+| [`examples/xroute.ai/XRoute-tutorial.md`](examples/xroute.ai/XRoute-tutorial.md) | Markdown 教程（18 张截图） |
+| [`examples/xroute.ai/xroute-tutorial.mp4`](examples/xroute.ai/xroute-tutorial.mp4) | 视频教程（2 分钟，带 TTS 旁白） |
+| [`examples/xroute.ai/tutorial.srt`](examples/xroute.ai/tutorial.srt) | SRT 字幕 |
+| [`examples/xroute.ai/narration.mp3`](examples/xroute.ai/narration.mp3) | TTS 旁白音频 |
+| [`examples/xroute.ai/screenshots/`](examples/xroute.ai/screenshots/) | 18 张操作截图 |
+
+**生成方式：**
+
+```
+为 https://xroute.ai/ 生成视频教程，带字幕和旁白
+```
+
+Agent 自动完成：
+1. 探索网站并列出 6 个模块
+2. 处理邮箱验证码登录流程
+3. 截取 18 张截图（操作前后各一张）
+4. 使用 edge-tts（zh-CN-YunxiNeural）生成中文旁白
+5. 将每张图的显示时长与旁白时长同步
+6. 输出带旁白的 MP4 视频
+
 ## 能力映射
 
 Skill 使用抽象标识符，执行前确认你的工具对应关系：

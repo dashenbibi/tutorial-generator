@@ -116,6 +116,41 @@ All dependencies have automatic fallbacks — missing tools degrade gracefully r
     └── ...
 ```
 
+## Examples
+
+### XRoute.AI — Video Tutorial with Subtitles & Narration
+
+A complete tutorial for https://xroute.ai/ demonstrating all 5 modules:
+- Registration (email verification)
+- API Key management
+- Credit top-up
+- Model browsing (84 models)
+- Chat interface
+
+**Output files:**
+
+| File | Description |
+|------|-------------|
+| [`examples/xroute.ai/XRoute-tutorial.md`](examples/xroute.ai/XRoute-tutorial.md) | Markdown tutorial with 18 screenshots |
+| [`examples/xroute.ai/xroute-tutorial.mp4`](examples/xroute.ai/xroute-tutorial.mp4) | Video tutorial (2 min, with TTS narration) |
+| [`examples/xroute.ai/tutorial.srt`](examples/xroute.ai/tutorial.srt) | SRT subtitles |
+| [`examples/xroute.ai/narration.mp3`](examples/xroute.ai/narration.mp3) | TTS narration audio |
+| [`examples/xroute.ai/screenshots/`](examples/xroute.ai/screenshots/) | 18 step-by-step screenshots |
+
+**How it was generated:**
+
+```
+Generate a video tutorial for https://xroute.ai/ with subtitles and narration
+```
+
+The agent automatically:
+1. Explored the site and listed 6 modules
+2. Handled email verification login flow
+3. Took 18 screenshots (before + after each action)
+4. Generated TTS narration using edge-tts (zh-CN-YunxiNeural)
+5. Synced slide durations to narration lengths
+6. Produced the final MP4 with narration
+
 ## Capability mapping
 
 The skill uses abstract identifiers. Map them to your tool before running:
