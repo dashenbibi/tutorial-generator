@@ -91,6 +91,12 @@ If the user has already named the features to document (e.g. "document signup an
 3. READ_PAGE(full) → read full page structure
 4. Extract: page title, all main navigation links, core feature areas
    (VISUAL_ANALYZE optional — may help understand layout, not required)
+5. Detect SPA framework (affects navigation and click strategy in Phase 3):
+   RUN_JS:
+     const isAngular = !!document.querySelector('[ng-version]') || !!document.querySelector('app-root');
+     const isVue     = !!document.querySelector('[data-v-app]') || !!window.__vue_app__;
+     const isReact   = !!document.querySelector('[data-reactroot]') || !!(window.__REACT_DEVTOOLS_GLOBAL_HOOK__);
+     // record result as SPA_FRAMEWORK = "angular" | "vue" | "react" | "none"
 ```
 
 After scouting, output the following and **end the response here. Do not proceed to any next step:**
@@ -255,13 +261,71 @@ READ_PAGE(compact) → returns element list with refs
 CLICK(e3)          → click directly using ref, no annotated screenshot needed
 ```
 
+**SPA click strategy (use when SPA_FRAMEWORK ≠ "none"):**
+
+Standard `CLICK` often fails in Angular / Vue / React because the framework's event system is not triggered by native DOM events. Use `RUN_JS` with a full mouse event sequence instead:
+
+```javascript
+// SPA-safe click — dispatches the full mousedown → mouseup → click sequence
+function spaClick(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return false;
+  ['mousedown', 'mouseup', 'click'].forEach(type => {
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+  });
+  return true;
+}
+
+// Find by text content (when selector is not reliable)
+function spaClickByText(text) {
+  for (const el of document.querySelectorAll('a, button, [role="button"], tr, li, span, div')) {
+    if (el.textContent.trim().includes(text)) {
+      ['mousedown', 'mouseup', 'click'].forEach(type => {
+        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      });
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+**SPA navigation strategy:**
+
+Do NOT use `NAVIGATE(url)` for in-app page transitions in SPA — it triggers a full page reload and loses session/routing state. Use JS routing instead:
+
+```javascript
+// Angular
+window.dispatchEvent(new PopStateEvent('popstate'));
+// or inject route via Angular router if accessible:
+// ng.getComponent(document.querySelector('app-root')).router.navigate(['/target-path'])
+
+// Vue
+window.__vue_app__?.config.globalProperties.$router?.push('/target-path')
+
+// React (React Router)
+window.history.pushState({}, '', '/target-path');
+window.dispatchEvent(new PopStateEvent('popstate'));
+
+// Universal fallback — use anchor click instead of location.href:
+document.querySelector('a[href="/target-path"]')?.click();
+```
+
+If session is lost despite the above (SPA reloaded or token expired):
+```
+→ Re-login using stored credentials (Strategy A in Phase 2)
+→ After login, resume from the last visited module URL using JS routing
+```
+
 Correct order per step:
 
 ```
 1. CAPTURE → shot_{nn}_step{s}_before.png    ← save clean screenshot first
 2. READ_PAGE(compact)                        ← get element refs (no screenshot produced)
 3. IF video: wait(1.5s), record (x,y)       ← focus pause for viewer
-4. Execute action (CLICK / TYPE / PRESS_KEY)
+4. Execute action:
+     IF SPA_FRAMEWORK = "none": CLICK(ref)
+     IF SPA_FRAMEWORK ≠ "none": RUN_JS(spaClick / spaClickByText)
 5. Wait for page response (up to 3s)
 6. CAPTURE → shot_{nn}_step{s}_after.png    ← save clean screenshot
 7. VISUAL_ANALYZE (optional, skip on failure — does not affect saved screenshots)
@@ -441,6 +505,10 @@ Ask: "Do you want to add any modules, re-explore any step, or export to another 
 |-----------|--------|
 | Page load timeout | Wait 5s, retry once; skip and log if still failing |
 | Element not found | READ_PAGE to refresh refs, retry once; CAPTURE full page and continue |
+| Click has no effect (SPA) | Switch from CLICK to RUN_JS spaClick with full mouse event sequence (mousedown → mouseup → click) |
+| Can't enter detail page (SPA) | Use spaClickByText to find element by text content; or try dblclick event |
+| Session lost after navigation (SPA) | Avoid NAVIGATE for in-app transitions; use JS routing (pushState / Vue router / Angular router) instead |
+| Session lost and cannot recover | Re-login with stored credentials, then resume from last module using JS routing |
 | Modal / overlay blocking | PRESS_KEY(Esc) or click overlay; log as known issue if persists |
 | VISUAL_ANALYZE failure | Skip immediately, no retry; CAPTURE is independent and unaffected |
 | Screenshot count too low (< modules × 3) | Re-capture missing steps before Phase 4 |
