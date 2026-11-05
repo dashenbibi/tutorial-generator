@@ -196,7 +196,7 @@ The agent checks which capabilities the task needs and maps them to the tools av
 **A**: Completely safe. The workflow adheres to strict privacy rules: it will **never ask for or process passwords or verification codes in chat**. When authentication is needed, you sign in directly in your browser, and the agent only verifies that the target workspace is accessible.
 
 **Q: Can I use it if my environment lacks screen recording or TTS tools?**  
-**A**: Yes. The default format is pure Markdown with verified screenshots. If video is requested but native recording is unsupported, the agent gracefully falls back to a screenshot slideshow, and falls back to subtitles if TTS is unavailable.
+**A**: Yes. The default format is pure Markdown with verified screenshots. If video is requested but native recording is unsupported, the agent tells you what a slideshow loses, gets your agreement, and labels the result as a slideshow (filename and first frame) — it never presents one as an operation walkthrough.
 
 **Q: Is this a CLI command or an AI Agent Skill?**  
 **A**: It is an AI Agent Skill (defined in `SKILL.md`). Once installed, it is loaded into your agent (Claude Code, Cursor, Antigravity, Codex, etc.) and driven autonomously by natural language prompts.
@@ -205,6 +205,7 @@ The agent checks which capabilities the task needs and maps them to the tools av
 
 | Version | Changes |
 |---------|---------|
+| v5.0.0 | Evidence model: a step is an action pair (before/action/after), state-only screens excluded from enforceable steps; form decided up front with recording first and slideshow labelled; coverage matrix; stopping points; falsifiable delivery checklist |
 | v4.0.0 | Self-contained, agent-agnostic workflow; verified screenshots, login handoff, multiple formats, and capability checks |
 | v3.2.0 | Pure English SKILL.md; separate bilingual README files |
 | v3.1.0 | Bilingual SKILL.md (English + Chinese inline) |
